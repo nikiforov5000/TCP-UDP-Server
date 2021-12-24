@@ -63,6 +63,7 @@ public:
 			inet_ntop(AF_INET, &client.sin_addr, host, NI_MAXHOST);
 			std::cout << host << " connected on port " << ntohs(client.sin_port) << std::endl;
 		}
+		closesocket(m_listening);
 	}
 	std::string receiveInfo() {
 //		receive info udpport and filename
@@ -99,7 +100,11 @@ public:
 				return;
 			}
 		}																  
-	}																	  
+	}
+	void closeConn() {
+		closesocket(m_clientSocket);
+		WSACleanup();
+	}
 };
 
 class UDPServer {
@@ -174,6 +179,10 @@ public:
 		}
 		ofs.close();
 	}
+	void closeConn() {
+		closesocket(m_in);
+		WSACleanup();
+	}
 
 };
 int main(int argc, char* argv[]) {
@@ -201,8 +210,11 @@ int main(int argc, char* argv[]) {
 		//if (status == std::future_status::ready) {
 			//if (resultUdpRecv.get() == 0) {
 				udpServer.saveFile(folderName, fileName);
-				udpServer.~UDPServer();
-				tcpServer.~TCPServer();
+				std::string disc = "disconnect";
+				tcpServer.sendInfo(disc);
+
+				udpServer.closeConn();
+				tcpServer.closeConn();
 			//}
 		//}
 	//}
