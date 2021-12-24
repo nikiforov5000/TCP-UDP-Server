@@ -40,9 +40,7 @@ public:
 		hint.sin_family = AF_INET;
 		hint.sin_port = htons(m_tcpPort);
 		inet_pton(AF_INET, m_ipAddress.c_str(), &hint.sin_addr);
-		//////////// listen...
 		bind(m_listening, (sockaddr*)&hint, sizeof(hint));
-		// Set sock to be m_listening sock
 		listen(m_listening, SOMAXCONN);
 		// Wait for connection
 		sockaddr_in client;
@@ -66,7 +64,6 @@ public:
 		closesocket(m_listening);
 	}
 	std::string receiveInfo() {
-//		receive info udpport and filename
 		// accept 
 		char buf[128];
 		
@@ -85,12 +82,12 @@ public:
 	}
 	void sendInfo(std::string& info) {
 		int bytesSent = send(m_clientSocket, info.c_str(), info.length() + 1, 0); // Send to client a response
-		std::cout << "bytesSent:" << bytesSent << std::endl;
+		std::cout << "tcpConfSent:" << info << std::endl;
 	}
 	void sendConf() {	
 		size_t count{};
 		while (true) {													  
-			std::this_thread::sleep_for(std::chrono::milliseconds(2));	  
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));	  
 			if (!ConfQueue.empty()) {									  
 				sendInfo(ConfQueue.front());							  
 				ConfQueue.pop();
@@ -137,36 +134,30 @@ public:
 		}
 	}
 	int recvFile() {
-//		receive a pack and store into temp map
-		char buf[2048];
+		//		receive a pack and store into temp map
+		const size_t bufSize = 65536;
+		char buf[bufSize];
 		sockaddr_in client; // Use to hold the client information (port / ip address)
 		int clientLength = sizeof(client); // The size of the client information
 		while (true) {
 			ZeroMemory(&client, clientLength); // Clear the client structure
-			ZeroMemory(buf, 2048); // Clear the receive buffer
+			ZeroMemory(buf, bufSize); // Clear the receive buffer
 			// Wait for message
-			std::this_thread::sleep_for(std::chrono::milliseconds(50));
-
-			std::cout << "about to  recvfrom" << std::endl;
-
-			int bytesIn = recvfrom(m_in, buf, 2048, 0, (sockaddr*)&client, &clientLength);
-
-			std::cout << "recv buf size: " << sizeof(buf) << std::endl;
-
+			std::this_thread::sleep_for(std::chrono::milliseconds(0));
+			int bytesIn = recvfrom(m_in, buf, bufSize, 0, (sockaddr*)&client, &clientLength);
 			if (bytesIn == SOCKET_ERROR) {
 				std::cout << "Error receiving from client " << WSAGetLastError() << std::endl;
 				continue;
 			}
-			//////////// store pack
+			// store pack
 			std::string stringBuf(buf);
 			if (stringBuf == "-1") {
 				return 0;
 			}
 			int id{ std::stoi(stringBuf.substr(0, stringBuf.find(' '))) };
 			std::string pack{ stringBuf.substr(stringBuf.find(' ') + 1, stringBuf.length()) };
-
 			m_Storage.emplace(id, pack);
-//		push confirmation in conf queue
+//		push confirmation
 			ConfQueue.emplace(std::to_string(id) + " " + std::to_string(stringBuf.length()));
 		}
 		return -1;
@@ -186,13 +177,12 @@ public:
 
 };
 int main(int argc, char* argv[]) {
-	std::string ipAddress{ argv[1] };//127.0.0.1
-	int tcpPort{ atoi(argv[2]) };//5555 
-	std::string folderName{ argv[3] };//temp
-
-//	tcp server starts and accepts call crom client
+	std::string ipAddress{ argv[1] };	//127.0.0.1
+	int tcpPort{ atoi(argv[2]) };		//5555 
+	std::string folderName{ argv[3] };	//temp
+//	tcp server starts and accepts call from client
 	TCPServer tcpServer(ipAddress, tcpPort);
-//	RECV tcp
+//	tcp recv
 	std::string info{ tcpServer.receiveInfo() }; // 1st udp and filename // 2nd confirmation to close
 	int udpPort{ std::stoi(info.substr(0, info.find(' '))) };
 	std::string fileName{ info.substr(info.find(' ') + 1, info.length()) };
@@ -200,24 +190,15 @@ int main(int argc, char* argv[]) {
 	UDPServer udpServer(ipAddress, udpPort);
 //	new thread RECV udp
 	std::future resultUdpRecv{ std::async(std::launch::async, &UDPServer::recvFile, &udpServer) };
-	//udpServer.recvFile();
-//	new thread SEND tcp
-	//std::future resultTcpSendConfs{ std::async(std::launch::async, &TCPServer::sendConf, &tcpServer) };
+
 	tcpServer.sendConf();
-//		send conf from conf queue
-	//if (resultUdpRecv.valid()) {
-		//auto status{ resultUdpRecv.wait_for(std::chrono::seconds(3)) };
-		//if (status == std::future_status::ready) {
-			//if (resultUdpRecv.get() == 0) {
-				udpServer.saveFile(folderName, fileName);
-				std::string disc = "disconnect";
-				tcpServer.sendInfo(disc);
+	udpServer.saveFile(folderName, fileName);
 
-				udpServer.closeConn();
-				tcpServer.closeConn();
-			//}
-		//}
-	//}
+	std::string disc = "disconnect";
+	tcpServer.sendInfo(disc);
+
+	udpServer.closeConn();
+	tcpServer.closeConn();
+
 	return 0;
-
 }
