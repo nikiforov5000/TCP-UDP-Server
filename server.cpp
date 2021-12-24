@@ -143,7 +143,7 @@ public:
 			ZeroMemory(&client, clientLength); // Clear the client structure
 			ZeroMemory(buf, bufSize); // Clear the receive buffer
 			// Wait for message
-			std::this_thread::sleep_for(std::chrono::milliseconds(0));
+			std::this_thread::sleep_for(std::chrono::milliseconds(50));
 			int bytesIn = recvfrom(m_in, buf, bufSize, 0, (sockaddr*)&client, &clientLength);
 			if (bytesIn == SOCKET_ERROR) {
 				std::cout << "Error receiving from client " << WSAGetLastError() << std::endl;
