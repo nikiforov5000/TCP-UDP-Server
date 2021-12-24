@@ -11,7 +11,7 @@
 #include <WS2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
 
-std::queue<std::string> ConfQueue{};
+std::map<int, std::string> ConfQueue{};
 
 class TCPServer {
 	std::string m_ipAddress{};
@@ -80,17 +80,17 @@ public:
 		}
 		return std::string(buf);
 	}
-	void sendInfo(std::string& info) {
+	void sendInfo(std::string info) {
 		int bytesSent = send(m_clientSocket, info.c_str(), info.length() + 1, 0); // Send to client a response
-		std::cout << "tcpConfSent:" << info << std::endl;
+		//std::cout << "tcpConfSent:" << info << std::endl;
 	}
 	void sendConf() {	
 		size_t count{};
 		while (true) {													  
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));	  
 			if (!ConfQueue.empty()) {									  
-				sendInfo(ConfQueue.front());							  
-				ConfQueue.pop();
+				sendInfo((*ConfQueue.begin()).second);							  
+				ConfQueue.erase(ConfQueue.begin());
 				count = 0;
 			}			
 			if (count++ > 1000) {
@@ -98,7 +98,7 @@ public:
 			}
 		}																  
 	}
-	void closeConn() {
+	void closeConn() { 
 		closesocket(m_clientSocket);
 		WSACleanup();
 	}
@@ -158,7 +158,7 @@ public:
 			std::string pack{ stringBuf.substr(stringBuf.find(' ') + 1, stringBuf.length()) };
 			m_Storage.emplace(id, pack);
 //		push confirmation
-			ConfQueue.emplace(std::to_string(id) + " " + std::to_string(stringBuf.length()));
+			ConfQueue.emplace(id, std::to_string(id) + " " + std::to_string(bytesIn));
 		}
 		return -1;
 	}
