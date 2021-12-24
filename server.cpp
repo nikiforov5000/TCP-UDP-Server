@@ -86,15 +86,20 @@ public:
 		int bytesSent = send(m_clientSocket, info.c_str(), info.length() + 1, 0); // Send to client a response
 		std::cout << "bytesSent:" << bytesSent << std::endl;
 	}
-	void sendConf() {													  ////////////////////////////////
-		while (true) {													  ////////////////////////////////
-			std::this_thread::sleep_for(std::chrono::milliseconds(2));	  ////////////////////////////////
-			if (!ConfQueue.empty()) {									  ////////////////////////////////
-				sendInfo(ConfQueue.front());							  ////////////////////////////////
-				ConfQueue.pop();										  ////////////////////////////////
-			}															  ////////////////////////////////
-		}																  ////////////////////////////////
-	}																	  ////////////////////////////////
+	void sendConf() {	
+		size_t count{};
+		while (true) {													  
+			std::this_thread::sleep_for(std::chrono::milliseconds(2));	  
+			if (!ConfQueue.empty()) {									  
+				sendInfo(ConfQueue.front());							  
+				ConfQueue.pop();
+				count = 0;
+			}			
+			if (count++ > 1000) {
+				return;
+			}
+		}																  
+	}																	  
 };
 
 class UDPServer {
@@ -141,7 +146,7 @@ public:
 
 			int bytesIn = recvfrom(m_in, buf, 2048, 0, (sockaddr*)&client, &clientLength);
 
-			std::cout << "recv buf " << buf << " " << std::endl;
+			std::cout << "recv buf size: " << sizeof(buf) << std::endl;
 
 			if (bytesIn == SOCKET_ERROR) {
 				std::cout << "Error receiving from client " << WSAGetLastError() << std::endl;
@@ -186,19 +191,21 @@ int main(int argc, char* argv[]) {
 	UDPServer udpServer(ipAddress, udpPort);
 //	new thread RECV udp
 	std::future resultUdpRecv{ std::async(std::launch::async, &UDPServer::recvFile, &udpServer) };
+	//udpServer.recvFile();
 //	new thread SEND tcp
-	std::future resultTcpSendConfs{ std::async(std::launch::async, &TCPServer::sendConf, &tcpServer) };
+	//std::future resultTcpSendConfs{ std::async(std::launch::async, &TCPServer::sendConf, &tcpServer) };
+	tcpServer.sendConf();
 //		send conf from conf queue
-	if (resultUdpRecv.valid()) {
-		auto status{ resultUdpRecv.wait_for(std::chrono::seconds(3)) };
-		if (status == std::future_status::ready) {
-			if (resultUdpRecv.get() == 0) {
+	//if (resultUdpRecv.valid()) {
+		//auto status{ resultUdpRecv.wait_for(std::chrono::seconds(3)) };
+		//if (status == std::future_status::ready) {
+			//if (resultUdpRecv.get() == 0) {
 				udpServer.saveFile(folderName, fileName);
 				udpServer.~UDPServer();
 				tcpServer.~TCPServer();
-			}
-		}
-	}
+			//}
+		//}
+	//}
 	return 0;
 
 }
