@@ -86,15 +86,15 @@ public:
 		int bytesSent = send(m_clientSocket, info.c_str(), info.length() + 1, 0); // Send to client a response
 		std::cout << "bytesSent:" << bytesSent << std::endl;
 	}
-	void sendConf() {
-		while (true) {
-		std::this_thread::sleep_for(std::chrono::milliseconds(5));
-			if (!ConfQueue.empty()) {
-				sendInfo(ConfQueue.front());
-				ConfQueue.pop();
-			}
-		}
-	}
+	void sendConf() {													  ////////////////////////////////
+		while (true) {													  ////////////////////////////////
+			std::this_thread::sleep_for(std::chrono::milliseconds(2));	  ////////////////////////////////
+			if (!ConfQueue.empty()) {									  ////////////////////////////////
+				sendInfo(ConfQueue.front());							  ////////////////////////////////
+				ConfQueue.pop();										  ////////////////////////////////
+			}															  ////////////////////////////////
+		}																  ////////////////////////////////
+	}																	  ////////////////////////////////
 };
 
 class UDPServer {
@@ -126,7 +126,7 @@ public:
 			return;
 		}
 	}
-	void recvFile() {
+	int recvFile() {
 //		receive a pack and store into temp map
 		char buf[2048];
 		sockaddr_in client; // Use to hold the client information (port / ip address)
@@ -147,11 +147,11 @@ public:
 				std::cout << "Error receiving from client " << WSAGetLastError() << std::endl;
 				continue;
 			}
-			if (buf == "EXIT") {
-				return;
-			}
 			//////////// store pack
-			std::string stringBuf{ std::string(buf) };
+			std::string stringBuf(buf);
+			if (stringBuf == "-1") {
+				return 0;
+			}
 			int id{ std::stoi(stringBuf.substr(0, stringBuf.find(' '))) };
 			std::string pack{ stringBuf.substr(stringBuf.find(' ') + 1, stringBuf.length()) };
 
@@ -159,7 +159,7 @@ public:
 //		push confirmation in conf queue
 			ConfQueue.emplace(std::to_string(id) + " " + std::to_string(stringBuf.length()));
 		}
-		
+		return -1;
 	}
 	void saveFile(std::string& folderName, std::string& fileName) {
 		std::filesystem::create_directories("./" + folderName);
@@ -189,12 +189,16 @@ int main(int argc, char* argv[]) {
 //	new thread SEND tcp
 	std::future resultTcpSendConfs{ std::async(std::launch::async, &TCPServer::sendConf, &tcpServer) };
 //		send conf from conf queue
-
-	if (tcpServer.receiveInfo() == "disconnect") {
-		udpServer.saveFile(folderName, fileName);
-		udpServer.~UDPServer();
-		tcpServer.~TCPServer();
+	if (resultUdpRecv.valid()) {
+		auto status{ resultUdpRecv.wait_for(std::chrono::seconds(3)) };
+		if (status == std::future_status::ready) {
+			if (resultUdpRecv.get() == 0) {
+				udpServer.saveFile(folderName, fileName);
+				udpServer.~UDPServer();
+				tcpServer.~TCPServer();
+			}
+		}
 	}
-
+	return 0;
 
 }
